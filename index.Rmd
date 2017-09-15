@@ -1,0 +1,187 @@
+---
+title: "Weight Lifting Prediction Analysis"
+author: "Sérgio Henrique Barra"
+date: "September 14, 2017"
+output: html_document
+---
+## 1) Summary
+
+This assignment is a course project from Practical Machine Learning course from
+Coursera and Johns Hopkins University. The dataset is a Weight Lifting Exercise
+(more info [here](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har)),
+from Velloso, E., Bulling, A., Gellersen, H., Ugulino, W. and Fuks, H.
+
+The dataset consists in data of 1.25kg-weight lifting of six male participants aged
+between 20 and 28 years, evaluating how well a participant performed an 
+Unilateral Dumbbell Biceps Curl. The exercise was repeated 10 times, in five different
+styles of execution:  
+
+* Exactly according to the specification (Class A),  
+* Throwing the elbows to the front (Class B),  
+* Lifting the dumbbell only halfway (Class C),  
+* Lowering the dumbbell only halfway (Class D),  
+* Throwing the hips to the front (Class E).
+
+## 2) Loading data
+```{r, echo = FALSE}
+knitr::opts_chunk$set(message = FALSE)
+```
+
+Loading the necessary packages for the analysis:
+```{r, message = FALSE}
+library(caret)
+library(parallel) # For parallel processing
+library(doParallel)
+library(randomForest)
+library(pander)
+```
+
+Downloading, if needed, and reading the training and testing datasets.
+```{r}
+if (!(file.exists("pml-training.csv") & file.exists("pml-testing.csv"))) {
+trainUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+download.file(trainUrl, "./pml-training.csv")
+download.file(testUrl, "./pml-testing.csv")
+}
+
+raw_training <- read.csv("./pml-training.csv", stringsAsFactors = FALSE)
+testing <- read.csv("./pml-testing.csv", stringsAsFactors = FALSE)
+```
+
+## 3) Cleaning Data
+
+The raw training data has **`r dim(raw_training)[1]`** observations of **`r dim(raw_training)[2]`** variables.
+
+However, some variables have almost all NA or NULL values. Let's check which ones are those:
+```{r}
+NAsum <- sapply(raw_training, function(x) sum(is.na(x)))
+NULLsum <- sapply(raw_training, function(x) sum(x == "", na.rm = TRUE))
+
+tbNA <- table(NAsum)
+tbNULL <- table(NULLsum)
+
+df <- data.frame(tbNA, tbNULL)
+names(df) <- c("NA in a column", "Frequency of NA", "NULL in a column", "Frequency of NA")
+pander(df)
+```
+
+As we can see, there are **`r tbNA[2]`** columns with **`r names(tbNA)[2]`** missing values.
+This represents **`r round(100*max(NAsum)/dim(raw_training)[1], 1)`%** of NA values in a column,
+therefore being low valuable for building a machine learning model. Similarly,
+this also happens with the NULL values. We can now remove these columns from the raw training dataset.
+```{r}
+NA_NULLind <- which(NAsum > 0|NULLsum > 0)
+
+filtered_training <- raw_training[, -NA_NULLind]
+```
+
+For the models, we will consider that the first 7 variables (`r names(filtered_training[,1:7])`)
+are not relevant. $X$ is unique and the other 6 variables are only for reference purposes.
+```{r}
+cleaned_training <- filtered_training[, 8:60]
+
+print(names(cleaned_training))
+```
+
+Then, we need to format the integer columns into numeric and the $classe$ column
+into factor.
+```{r}
+INTind <- sapply(cleaned_training, function(x) class(x) == "integer")
+cleaned_training[, INTind] <- sapply(cleaned_training[, INTind], as.numeric)
+cleaned_training[, 53] <- as.factor(cleaned_training[, 53])
+```
+
+## 4) Machine Learning Model
+
+### 4.1)  Data splitting
+
+We will split cleaned_training dataset into two: **training** and **validation**, where the latter
+will represent **25%** of the dataset.
+```{r}
+set.seed(1)
+inTrain <- createDataPartition(y = cleaned_training$classe, p = 0.75, list = F)
+training <- cleaned_training[inTrain, ]
+validation <- cleaned_training[-inTrain, ]
+```
+
+### 4.2) Random Forest Model
+
+Now, we train the Random Forest model using parallel processing, with a 5 k-fold
+cross-validation.
+```{r rf_method, cache = TRUE}
+cluster <- makeCluster(detectCores() - 1)
+registerDoParallel(cluster)
+
+start.time <- Sys.time()
+
+set.seed(1)
+ctrl <- trainControl(method = "cv", number = 5, allowParallel = TRUE)
+mod_rf <- train(classe ~ ., data = training, trControl = ctrl, method = "rf")
+
+elapsed_rf <- Sys.time() - start.time
+
+stopCluster(cluster)
+registerDoSEQ() # R returns to single-threaded processing
+
+print(elapsed_rf)
+```
+
+## 4.3) Gradient Boosted Regression Model
+
+We could also use GBM to build the model, under the same conditions of
+parallel processing and resampling method:
+```{r gbm_method, cache = TRUE}
+cluster <- makeCluster(detectCores() - 1)
+registerDoParallel(cluster)
+
+start.time <- Sys.time()
+set.seed(1)
+ctrl <- trainControl(method = "cv", number = 5, allowParallel = TRUE)
+mod_gbm <- train(classe ~ ., data = training, trControl = ctrl, method = "gbm", verbose = FALSE)
+elapsed_gbm <- Sys.time() - start.time
+
+stopCluster(cluster)
+registerDoSEQ() # R returns to single-threaded processing
+
+print(elapsed_gbm)
+```
+
+## 5) Validation
+
+### 5.1) Random Forest
+```{r}
+pred_rf <- predict(mod_rf, validation)
+
+confusionMatrix(pred_rf, validation$classe)
+```
+
+### 5.2) Generalized Boosted Regression
+```{r, message = FALSE}
+pred_gbm <- predict(mod_gbm, validation)
+
+confusionMatrix(pred_gbm, validation$classe)
+```
+
+## 6) Model evaluation
+
+Considering both models, we can see that although the GBM method ran faster than
+Random Forest, it achieved a lower accuracy. Therefore, **we will choose the Random Forest
+model for applying over the testing dataset**.
+
+We can see below the importance of the first 15 variables considered by RF model:
+```{r}
+plot(varImp(mod_rf), top = 15, main = "Random Forest variable importance")
+```
+
+We can see that **roll_belt**, **pitch_forearm** and **yaw_belt** are the three
+most important variables in the model.
+
+## 7) Predicting testing classe variable
+
+Now, using the built model to predict $classe$ in testing dataset:
+```{r}
+pred <- predict(mod_rf, testing)
+print(pred)
+```
