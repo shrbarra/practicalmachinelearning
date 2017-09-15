@@ -63,7 +63,7 @@ tbNA <- table(NAsum)
 tbNULL <- table(NULLsum)
 
 df <- data.frame(tbNA, tbNULL)
-names(df) <- c("NA in a column", "Frequency of NA", "NULL in a column", "Frequency of NULL")
+names(df) <- c("NA in a column", "Frequency", "NULL in a column", "Frequency")
 pander(df)
 ```
 
