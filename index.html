@@ -171,7 +171,7 @@ tbNA &lt;- table(NAsum)
 tbNULL &lt;- table(NULLsum)
 
 df &lt;- data.frame(tbNA, tbNULL)
-names(df) &lt;- c(&quot;NA in a column&quot;, &quot;Frequency of NA&quot;, &quot;NULL in a column&quot;, &quot;Frequency of NA&quot;)
+names(df) &lt;- c(&quot;NA in a column&quot;, &quot;Frequency of NA&quot;, &quot;NULL in a column&quot;, &quot;Frequency of NULL&quot;)
 pander(df)</code></pre>
 <table>
 <colgroup>
@@ -185,7 +185,7 @@ pander(df)</code></pre>
 <th align="center">NA in a column</th>
 <th align="center">Frequency of NA</th>
 <th align="center">NULL in a column</th>
-<th align="center">Frequency of NA</th>
+<th align="center">Frequency of NULL</th>
 </tr>
 </thead>
 <tbody>
