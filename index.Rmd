@@ -77,7 +77,7 @@ NA_NULLind <- which(NAsum > 0|NULLsum > 0)
 training <- raw_training[, -NA_NULLind]
 ```
 
-For the models, we will consider that the first 7 variables (`r names(training[,1:7])`)
+For the model, we will consider that the first 7 variables (`r names(training[,1:7])`)
 are not relevant. $X$ is unique and the other 6 variables are only for reference purposes.
 ```{r}
 training <- training[, 8:60]
@@ -95,7 +95,7 @@ training[, 53] <- as.factor(training[, 53])
 
 ## 4) Machine Learning Model
 
-Now, we train the Random Forest model using parallel processing, with a 5 k-fold
+Now, the Random Forest model is trained using parallel processing, with a 5 k-fold
 cross-validation.
 ```{r rf_method, cache = TRUE}
 cluster <- makeCluster(detectCores() - 1)
@@ -121,16 +121,16 @@ print(elapsed_rf)
 mod_rf$finalModel
 ```
 
-We can see that our RF model achieved a **small Out-of-bag error** (< 1%), which is a positive factor
-for model quality.
+Our RF model achieved a relatively **small Out-of-bag error rate** (< 1%), which is a positive factor
+for model quality. The model has the highest classification error on the D classe, around 1%.
 
 We can see below the importance of the first 15 variables considered by RF model:
 ```{r}
 plot(varImp(mod_rf), top = 15, main = "Random Forest variable importance")
 ```
 
-We can see that **roll_belt**, **pitch_forearm** and **yaw_belt** are the three
-most important variables in the model.
+We can see that **roll_belt** and **yaw_belt** are the two most important variables in the model,
+showing that the movements on the belt tend to be very relevant to differentiate the quality of the exercise.
 
 ## 6) Predicting testing classe variable
 
