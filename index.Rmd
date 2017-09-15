@@ -74,39 +74,26 @@ this also happens with the NULL values. We can now remove these columns from the
 ```{r}
 NA_NULLind <- which(NAsum > 0|NULLsum > 0)
 
-filtered_training <- raw_training[, -NA_NULLind]
+training <- raw_training[, -NA_NULLind]
 ```
 
-For the models, we will consider that the first 7 variables (`r names(filtered_training[,1:7])`)
+For the models, we will consider that the first 7 variables (`r names(training[,1:7])`)
 are not relevant. $X$ is unique and the other 6 variables are only for reference purposes.
 ```{r}
-cleaned_training <- filtered_training[, 8:60]
+training <- training[, 8:60]
 
-print(names(cleaned_training))
+print(names(training))
 ```
 
 Then, we need to format the integer columns into numeric and the $classe$ column
 into factor.
 ```{r}
-INTind <- sapply(cleaned_training, function(x) class(x) == "integer")
-cleaned_training[, INTind] <- sapply(cleaned_training[, INTind], as.numeric)
-cleaned_training[, 53] <- as.factor(cleaned_training[, 53])
+INTind <- sapply(training, function(x) class(x) == "integer")
+training[, INTind] <- sapply(training[, INTind], as.numeric)
+training[, 53] <- as.factor(training[, 53])
 ```
 
 ## 4) Machine Learning Model
-
-### 4.1)  Data splitting
-
-We will split cleaned_training dataset into two: **training** and **validation**, where the latter
-will represent **25%** of the dataset.
-```{r}
-set.seed(1)
-inTrain <- createDataPartition(y = cleaned_training$classe, p = 0.75, list = F)
-training <- cleaned_training[inTrain, ]
-validation <- cleaned_training[-inTrain, ]
-```
-
-### 4.2) Random Forest Model
 
 Now, we train the Random Forest model using parallel processing, with a 5 k-fold
 cross-validation.
@@ -128,47 +115,14 @@ registerDoSEQ() # R returns to single-threaded processing
 print(elapsed_rf)
 ```
 
-## 4.3) Gradient Boosted Regression Model
+## 5) Model evaluation
 
-We could also use GBM to build the model, under the same conditions of
-parallel processing and resampling method:
-```{r gbm_method, cache = TRUE}
-cluster <- makeCluster(detectCores() - 1)
-registerDoParallel(cluster)
-
-start.time <- Sys.time()
-set.seed(1)
-ctrl <- trainControl(method = "cv", number = 5, allowParallel = TRUE)
-mod_gbm <- train(classe ~ ., data = training, trControl = ctrl, method = "gbm", verbose = FALSE)
-elapsed_gbm <- Sys.time() - start.time
-
-stopCluster(cluster)
-registerDoSEQ() # R returns to single-threaded processing
-
-print(elapsed_gbm)
-```
-
-## 5) Validation
-
-### 5.1) Random Forest
 ```{r}
-pred_rf <- predict(mod_rf, validation)
-
-confusionMatrix(pred_rf, validation$classe)
+mod_rf$finalModel
 ```
 
-### 5.2) Generalized Boosted Regression
-```{r, message = FALSE}
-pred_gbm <- predict(mod_gbm, validation)
-
-confusionMatrix(pred_gbm, validation$classe)
-```
-
-## 6) Model evaluation
-
-Considering both models, we can see that although the GBM method ran faster than
-Random Forest, it achieved a lower accuracy. Therefore, **we will choose the Random Forest
-model for applying over the testing dataset**.
+We can see that our RF model achieved a **small Out-of-bag error** (< 1%), which is a positive factor
+for model quality.
 
 We can see below the importance of the first 15 variables considered by RF model:
 ```{r}
@@ -178,7 +132,7 @@ plot(varImp(mod_rf), top = 15, main = "Random Forest variable importance")
 We can see that **roll_belt**, **pitch_forearm** and **yaw_belt** are the three
 most important variables in the model.
 
-## 7) Predicting testing classe variable
+## 6) Predicting testing classe variable
 
 Now, using the built model to predict $classe$ in testing dataset:
 ```{r}
